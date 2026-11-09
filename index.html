@@ -22,7 +22,9 @@
 
   /* the intro: video sits full screen, contained, on the same black as its own background */
   .film{position:absolute;inset:0;transform-origin:50% 50%;transition:transform 1.1s cubic-bezier(.65,0,.25,1)}
-  .film video,.film img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:var(--bg)}
+  .film video,.film img,.film canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:var(--bg)}
+  /* the film is painted onto the canvas so it shares the page's colour path (a bare <video> can use the GPU's video layer, which shifts the black) */
+  .film video{opacity:0}
   .film img{opacity:0;transition:opacity .35s}
   .stage.done .film{transform:translateY(-15%) scale(.78)}
   .stage.still .film img{opacity:1}
@@ -70,11 +72,12 @@
 <main class="stage" id="stage">
   <div class="film">
     <video id="intro" muted playsinline preload="auto" aria-hidden="true"></video>
+    <canvas id="screen" aria-hidden="true"></canvas>
     <img id="still" alt="Shattered Softworks logo">
   </div>
 
   <section class="join" aria-label="Join Shattered Softworks">
-    <div class="label">Join the drop</div>
+    <div class="label">Join the community</div>
     <p class="lead">Devlogs, playtests and a say in what we build next for Project Inbound.</p>
     <div class="links">
       <a class="btn" href="https://discord.gg/SvNK82kVg7">Join the Discord</a>
@@ -98,6 +101,30 @@
   var cut=tall?'square':'wide';
   v.src='intro-'+cut+'.mp4';
   still.src='intro-end-'+cut+'.jpg';
+
+  // paint each video frame onto the canvas, letterboxed like object-fit:contain
+  var cv=document.getElementById('screen'), ctx=cv.getContext('2d'), BG='#0c0c0c';
+  function fit(){
+    var r=Math.min(window.devicePixelRatio||1,2);
+    cv.width=Math.round(cv.clientWidth*r); cv.height=Math.round(cv.clientHeight*r);
+    paint();
+  }
+  function paint(){
+    var W=cv.width,H=cv.height; ctx.fillStyle=BG; ctx.fillRect(0,0,W,H);
+    if(!v.videoWidth) return;
+    var k=Math.min(W/v.videoWidth,H/v.videoHeight), w=v.videoWidth*k, h=v.videoHeight*k;
+    ctx.drawImage(v,(W-w)/2,(H-h)/2,w,h);
+  }
+  function loop(){
+    paint();
+    if(v.requestVideoFrameCallback) v.requestVideoFrameCallback(loop);
+    else if(!v.paused && !v.ended) requestAnimationFrame(loop);
+  }
+  v.addEventListener('playing',loop);
+  v.addEventListener('loadeddata',paint);
+  v.addEventListener('ended',paint);
+  window.addEventListener('resize',fit);
+  fit();
 
   var shown=false;
   // bring in the join links and lift the logo (the film keeps playing underneath)
